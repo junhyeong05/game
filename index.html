@@ -14,11 +14,25 @@
     main { width: min(92vw, 720px); text-align: center; }
     h1 { margin: 0 0 10px; font-size: 1.45rem; letter-spacing: .08em; }
     .hud { display: flex; justify-content: space-between; margin: 0 4px 8px; color: #b7c9e8; font-weight: 700; }
-    canvas { display: block; width: 100%; aspect-ratio: 3 / 4; max-height: 76vh; border: 1px solid #44628d; border-radius: 12px; background: #091426; box-shadow: 0 16px 60px #0008; }
+    canvas { display: block; width: 100%; aspect-ratio: 3 / 4; max-height: 76vh; border: 1px solid #44628d; border-radius: 12px; background: #091426; box-shadow: 0 16px 60px #0008; touch-action: none; }
     p { margin: 10px 0 0; color: #9eb2d3; font-size: .9rem; }
     kbd { background: #1b2b46; border: 1px solid #496184; border-radius: 4px; padding: 1px 5px; color: #fff; }
     button { display: none; margin: 12px auto 0; padding: 9px 22px; border: 0; border-radius: 7px; background: #48c8ff; color: #061322; font-weight: 800; font-size: 1rem; }
-    @media (pointer: coarse) { p { font-size: .8rem; } }
+    #touch-controls { display: none; }
+    @media (pointer: coarse) {
+      body { min-height: 100svh; }
+      main { width: min(94vw, 540px); padding: 8px 0; }
+      h1 { margin-bottom: 6px; font-size: 1.15rem; }
+      .hud { margin-bottom: 5px; }
+      canvas { width: auto; height: min(58svh, 560px); max-width: 100%; margin: 0 auto; }
+      #touch-controls { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 10px auto 0; max-width: 420px; touch-action: none; user-select: none; }
+      .move-controls { display: flex; gap: 10px; }
+      #touch-controls button { display: grid; place-items: center; width: 66px; height: 58px; margin: 0; padding: 0; border: 1px solid #6090bd; border-radius: 14px; background: #1a3556; color: #eaf3ff; font-size: 1.35rem; touch-action: none; user-select: none; -webkit-user-select: none; }
+      #touch-controls button:active { background: #2d5a83; transform: scale(.96); }
+      #touch-controls #fire { width: 82px; background: #b63e61; border-color: #f17a91; font-size: 1rem; }
+      #restart { margin-top: 8px; }
+      p { margin-top: 6px; font-size: .75rem; }
+    }
   </style>
 </head>
 <body>
@@ -26,8 +40,15 @@
     <h1>🚀 미니 슈팅</h1>
     <div class="hud"><span>점수 <b id="score">0</b></span><span>목숨 <b id="lives">3</b></span></div>
     <canvas id="game" width="540" height="720" aria-label="미니 슈팅 게임"></canvas>
+    <div id="touch-controls" aria-label="터치 조작">
+      <div class="move-controls">
+        <button type="button" data-key="ArrowLeft" aria-label="왼쪽 이동">◀</button>
+        <button type="button" data-key="ArrowRight" aria-label="오른쪽 이동">▶</button>
+      </div>
+      <button type="button" id="fire" data-key=" " aria-label="발사">발사</button>
+    </div>
     <button id="restart">다시 시작</button>
-    <p><kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd> 이동 · <kbd>Space</kbd> 발사</p>
+    <p>키보드: <kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd> 이동 · <kbd>Space</kbd> 발사</p>
   </main>
   <script>
     const canvas = document.querySelector('#game');
@@ -111,6 +132,16 @@
     function loop() { update(); draw(); requestAnimationFrame(loop); }
     window.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault(); keys.add(e.key); });
     window.addEventListener('keyup', e => keys.delete(e.key));
+    document.querySelectorAll('#touch-controls [data-key]').forEach(button => {
+      const key = button.dataset.key;
+      button.addEventListener('pointerdown', e => {
+        e.preventDefault(); button.setPointerCapture(e.pointerId); keys.add(key);
+      });
+      const release = e => { e.preventDefault(); keys.delete(key); };
+      button.addEventListener('pointerup', release);
+      button.addEventListener('pointercancel', release);
+      button.addEventListener('lostpointercapture', () => keys.delete(key));
+    });
     restartBtn.addEventListener('click', reset);
     reset(); loop();
   </script>
