@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>미니 슈팅</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: radial-gradient(ellipse at 50% 15%, #18345a, #080d1c 70%);
+      color: #eaf3ff; font-family: system-ui, sans-serif;
+    }
+    main { width: min(92vw, 720px); text-align: center; }
+    h1 { margin: 0 0 10px; font-size: 1.45rem; letter-spacing: .08em; }
+    .hud { display: flex; justify-content: space-between; margin: 0 4px 8px; color: #b7c9e8; font-weight: 700; }
+    canvas { display: block; width: 100%; aspect-ratio: 3 / 4; max-height: 76vh; border: 1px solid #44628d; border-radius: 12px; background: #091426; box-shadow: 0 16px 60px #0008; }
+    p { margin: 10px 0 0; color: #9eb2d3; font-size: .9rem; }
+    kbd { background: #1b2b46; border: 1px solid #496184; border-radius: 4px; padding: 1px 5px; color: #fff; }
+    button { display: none; margin: 12px auto 0; padding: 9px 22px; border: 0; border-radius: 7px; background: #48c8ff; color: #061322; font-weight: 800; font-size: 1rem; }
+    @media (pointer: coarse) { p { font-size: .8rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🚀 미니 슈팅</h1>
+    <div class="hud"><span>점수 <b id="score">0</b></span><span>목숨 <b id="lives">3</b></span></div>
+    <canvas id="game" width="540" height="720" aria-label="미니 슈팅 게임"></canvas>
+    <button id="restart">다시 시작</button>
+    <p><kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd> 이동 · <kbd>Space</kbd> 발사</p>
+  </main>
+  <script>
+    const canvas = document.querySelector('#game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.querySelector('#score');
+    const livesEl = document.querySelector('#lives');
+    const restartBtn = document.querySelector('#restart');
+    const W = canvas.width, H = canvas.height;
+    const keys = new Set();
+    let player, bullets, enemies, stars, score, lives, frame, gameOver, lastShot;
+
+    function reset() {
+      player = { x: W / 2, y: H - 64, w: 38, h: 34, speed: 5.5 };
+      bullets = []; enemies = []; score = 0; lives = 3; frame = 0; gameOver = false; lastShot = 0;
+      stars = Array.from({ length: 75 }, () => ({ x: Math.random() * W, y: Math.random() * H, s: Math.random() * 1.8 + .4 }));
+      scoreEl.textContent = score; livesEl.textContent = lives; restartBtn.style.display = 'none';
+    }
+
+    function shoot() {
+      if (frame - lastShot < 12) return;
+      bullets.push({ x: player.x, y: player.y - 20 }); lastShot = frame;
+    }
+
+    function update() {
+      if (gameOver) return;
+      frame++;
+      if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) player.x -= player.speed;
+      if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) player.x += player.speed;
+      player.x = Math.max(22, Math.min(W - 22, player.x));
+      if (keys.has(' ')) shoot();
+      stars.forEach(s => { s.y += s.s; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } });
+      bullets.forEach(b => b.y -= 9);
+      bullets = bullets.filter(b => b.y > -10);
+      const rate = Math.max(28, 56 - Math.floor(score / 40));
+      if (frame % rate === 0) enemies.push({ x: 25 + Math.random() * (W - 50), y: -24, r: 15 + Math.random() * 7, speed: 2 + Math.random() * 1.5 + score / 350 });
+      enemies.forEach(e => e.y += e.speed);
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        const hitByBullet = bullets.findIndex(b => Math.hypot(b.x - e.x, b.y - e.y) < e.r + 4);
+        if (hitByBullet !== -1) {
+          bullets.splice(hitByBullet, 1); enemies.splice(i, 1); score += 10; scoreEl.textContent = score; continue;
+        }
+        if (Math.abs(e.x - player.x) < e.r + 16 && Math.abs(e.y - player.y) < e.r + 15) {
+          enemies.splice(i, 1); lives--; livesEl.textContent = lives;
+          if (lives <= 0) endGame();
+        } else if (e.y - e.r > H) {
+          enemies.splice(i, 1); lives--; livesEl.textContent = lives;
+          if (lives <= 0) endGame();
+        }
+      }
+    }
+
+    function drawShip(x, y) {
+      ctx.save(); ctx.translate(x, y);
+      ctx.fillStyle = '#50d9ff'; ctx.beginPath(); ctx.moveTo(0, -21); ctx.lineTo(19, 15); ctx.lineTo(0, 8); ctx.lineTo(-19, 15); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#d9fbff'; ctx.beginPath(); ctx.ellipse(0, 0, 5, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffb84d'; ctx.beginPath(); ctx.moveTo(-6, 14); ctx.lineTo(0, 26 + Math.random() * 7); ctx.lineTo(6, 14); ctx.fill(); ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0c1d36'); bg.addColorStop(1, '#080f20');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#b9d8ff'; stars.forEach(s => { ctx.globalAlpha = .35 + s.s / 3; ctx.fillRect(s.x, s.y, s.s, s.s); }); ctx.globalAlpha = 1;
+      bullets.forEach(b => { ctx.fillStyle = '#8df6ff'; ctx.shadowColor = '#55eaff'; ctx.shadowBlur = 10; ctx.fillRect(b.x - 2, b.y - 9, 4, 15); }); ctx.shadowBlur = 0;
+      enemies.forEach(e => {
+        ctx.fillStyle = '#ff5470'; ctx.shadowColor = '#ff334f'; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.fillStyle = '#641c3b'; ctx.beginPath(); ctx.arc(e.x - 5, e.y - 2, 2, 0, Math.PI * 2); ctx.arc(e.x + 5, e.y - 2, 2, 0, Math.PI * 2); ctx.fill();
+      });
+      if (player) drawShip(player.x, player.y);
+      if (gameOver) {
+        ctx.fillStyle = '#050a14bb'; ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 42px system-ui'; ctx.fillText('게임 종료', W / 2, H / 2 - 20);
+        ctx.fillStyle = '#b9c9e4'; ctx.font = '20px system-ui'; ctx.fillText(`최종 점수: ${score}`, W / 2, H / 2 + 20);
+      }
+    }
+
+    function endGame() { gameOver = true; restartBtn.style.display = 'block'; }
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    window.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault(); keys.add(e.key); });
+    window.addEventListener('keyup', e => keys.delete(e.key));
+    restartBtn.addEventListener('click', reset);
+    reset(); loop();
+  </script>
+</body>
+</html>
