@@ -45,7 +45,7 @@
         <button type="button" data-key="ArrowLeft" aria-label="왼쪽 이동">◀</button>
         <button type="button" data-key="ArrowRight" aria-label="오른쪽 이동">▶</button>
       </div>
-      <button type="button" id="fire" data-key=" " aria-label="발사">발사</button>
+      <button type="button" id="fire" data-key="Space" aria-label="발사">발사</button>
     </div>
     <button id="restart">다시 시작</button>
     <p>키보드: <kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd> 이동 · <kbd>Space</kbd> 발사</p>
@@ -57,6 +57,10 @@
     const livesEl = document.querySelector('#lives');
     const restartBtn = document.querySelector('#restart');
     const W = canvas.width, H = canvas.height;
+    // 고해상도(레티나) 화면에서 선명하게: 내부 해상도만 키우고 좌표계는 W×H 그대로 유지
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const keys = new Set();
     let player, bullets, enemies, stars, score, lives, frame, gameOver, lastShot;
 
@@ -75,10 +79,10 @@
     function update() {
       if (gameOver) return;
       frame++;
-      if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) player.x -= player.speed;
-      if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) player.x += player.speed;
+      if (keys.has('ArrowLeft') || keys.has('KeyA')) player.x -= player.speed;
+      if (keys.has('ArrowRight') || keys.has('KeyD')) player.x += player.speed;
       player.x = Math.max(22, Math.min(W - 22, player.x));
-      if (keys.has(' ')) shoot();
+      if (keys.has('Space')) shoot();
       stars.forEach(s => { s.y += s.s; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } });
       bullets.forEach(b => b.y -= 9);
       bullets = bullets.filter(b => b.y > -10);
@@ -92,12 +96,10 @@
         if (hitByBullet !== -1) {
           bullets.splice(hitByBullet, 1); enemies.splice(i, 1); score += 10; scoreEl.textContent = score; continue;
         }
-        if (Math.abs(e.x - player.x) < e.r + 16 && Math.abs(e.y - player.y) < e.r + 15) {
-          enemies.splice(i, 1); lives--; livesEl.textContent = lives;
-          if (lives <= 0) endGame();
-        } else if (e.y - e.r > H) {
-          enemies.splice(i, 1); lives--; livesEl.textContent = lives;
-          if (lives <= 0) endGame();
+        const hitPlayer = Math.abs(e.x - player.x) < e.r + 16 && Math.abs(e.y - player.y) < e.r + 15;
+        if (hitPlayer || e.y - e.r > H) {
+          enemies.splice(i, 1); lives = Math.max(0, lives - 1); livesEl.textContent = lives;
+          if (lives === 0) { endGame(); break; }
         }
       }
     }
@@ -129,9 +131,21 @@
     }
 
     function endGame() { gameOver = true; restartBtn.style.display = 'block'; }
-    function loop() { update(); draw(); requestAnimationFrame(loop); }
-    window.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault(); keys.add(e.key); });
-    window.addEventListener('keyup', e => keys.delete(e.key));
+    // 고정 60fps 스텝: 모니터 주사율(120/144Hz 등)과 무관하게 같은 속도로 진행
+    const STEP = 1000 / 60;
+    let lastTime = null, acc = 0;
+    function loop(t) {
+      if (lastTime !== null) acc += Math.min(t - lastTime, 100);
+      lastTime = t;
+      while (acc >= STEP) { update(); acc -= STEP; }
+      draw(); requestAnimationFrame(loop);
+    }
+    // e.code는 물리 키 기준이라 한/영 전환·CapsLock 상태와 무관하게 동작
+    window.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault(); keys.add(e.code); });
+    window.addEventListener('keyup', e => keys.delete(e.code));
+    // 포커스를 잃으면 keyup이 오지 않으므로 눌린 키를 모두 해제
+    window.addEventListener('blur', () => keys.clear());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) keys.clear(); });
     document.querySelectorAll('#touch-controls [data-key]').forEach(button => {
       const key = button.dataset.key;
       button.addEventListener('pointerdown', e => {
@@ -143,7 +157,7 @@
       button.addEventListener('lostpointercapture', () => keys.delete(key));
     });
     restartBtn.addEventListener('click', reset);
-    reset(); loop();
+    reset(); requestAnimationFrame(loop);
   </script>
 </body>
 </html>
